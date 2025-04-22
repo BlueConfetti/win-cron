@@ -1,111 +1,198 @@
-# CronTask Scheduler Module
+# CronTask Scheduler PowerShell Module
 
 ## Overview
 
-The CronTask Scheduler Module is a PowerShell toolkit for creating, updating, and managing Windows scheduled tasks using both time‐based triggers (via cron expressions) and event log–based triggers. It allows you to build tasks that run on a schedule or in response to specific events—with support for relative date calculations (e.g. "Last Wednesday of the month") and event filtering (by Event ID and provider).
+The **CronTask Scheduler** module provides a PowerShell‐native way to create, update and manage Windows Scheduled Tasks using:
 
-## Features
-- **Time-based Scheduling:**
-  Create tasks using standard five-field cron expressions.
-- **Relative Date Scheduling:**
-  Use relative target dates (like "First" or "Last" occurrence of a weekday) as a base for scheduling.
-- **Event Log Triggers:**
-  Subscribe to event log entries (with filtering by log name, Event ID, and optionally provider) so that tasks run when a matching event is logged.
-- **Task Management:**
-  Easily register, query, and remove tasks via built-in functions.
+- **Cron expressions** (five‑field syntax)  
+- **Relative date targets** (e.g. “Last Wednesday of the month”)  
+- **Event log triggers** (filter by log name, Event ID, provider)  
 
-## Functions
-- **Get-RelativeTargetDate**
-  Calculates a target date within a month based on an occurrence (e.g. "Last") and a day-of-week.
-- **Convert-CronToSchedule**
-  Converts a five-field cron string into a schedule object.
-- **Parse-CronField**
-  Parses individual fields in a cron expression.
-- **Expand-CronSchedule**
-  Expands a cron expression into one or more schedule objects.
-- **Generate-ScheduleXmlBlocks**
-  Creates XML trigger blocks from schedule objects for time-based tasks.
-- **Register-CronTask**
-  Connects to the Task Scheduler service and registers a task using a complete XML definition.
-- **New-CronTask**
-  Combines a PowerShell ScriptBlock with scheduling parameters (cron, relative, and event triggers) to generate the XML definition and register a new scheduled task.
-- **Get-CronTask**
-  Retrieves scheduled tasks created using this module.
-- **Remove-CronTask**
-  Removes a scheduled task by name or input object.
+All tasks live under the `\cron` folder in Task Scheduler and run under the SYSTEM account by default.
+
+## Prerequisites
+
+- Windows PowerShell 5.1 or later (Windows)  
+- Or PowerShell Core (7.x) on Windows  
+- Administrative rights to register/unregister scheduled tasks and event sources  
 
 ## Installation
-1. **Clone or Download the Repository:**
-   Download or clone the repository to your local system.
-2. **Import the Module:**
-   Open PowerShell (preferably with administrative privileges) and run:
 
+You can install `win-cron` either directly from the PowerShell Gallery or manually:
+
+### 1. Install from PowerShell Gallery
+
+```powershell
+# Requires PowerShellGet module (built‑in on PS 5.1+)
+Install-Module -Name win-cron -Scope AllUsers
+# then import if needed
+Import-Module win-cron
+````
+
+### 2. Manual Installation
+
+1. Clone or download the repository (or just the `.psm1` file) to your machine:
+    
+    ```none
+    git clone https://github.com/your‑org/win‑cron.git C:\Modules\win-cron
+    ```
+    
+2. From an elevated PowerShell prompt:
+    
+    ```powershell
+    Import-Module -Name 'C:\Modules\win-cron\WinCron.psm1'
+    ```
+    
+3. Verify availability:
+    
+    ```powershell
+    Get-Command -Module win-cron
+    ```
+    
+## Public Cmdlets
+
+### Get-RelativeTargetDate
+
+Calculates a date in a month based on an occurrence (“First”, “Second”, “Third”, “Fourth”, “Last”) and weekday.
+
+```powershell
+Get-RelativeTargetDate
+  -Occurrence   <First|Second|Third|Fourth|Last>
+  -DayOfWeek    <Sunday|Monday|…|Saturday>
+  [-Month       <DateTime>]
+```
+
+### New-CronTask
+
+Creates and registers a new scheduled task combining:
+
+- A PowerShell `ScriptBlock` action  
+- A cron‐based calendar trigger (`-CronExpression`)  
+- Optional relative date adjustments (`-RelativeTargets`)  
+- Optional one‑shot behavior (`-RunOnce`)  
+- Optional event log trigger (`-EventLogTrigger` / `-EventLogTriggerOverrides`)
+
+```powershell
+New-CronTask
+  -Name                     <string>           # Task name (also event source if used)
+  -ScriptBlock              <ScriptBlock>      # Code to execute
+  [-CronExpression          <string>]          # e.g. "0 12 * * *"
+  [-RelativeTargets         <string[]>]        # e.g. @("Last,Wednesday,02:00:00")
+  [-BaseDate                <DateTime>]        # Defaults to (Get-Date)
+  [-RunOnce]                                  # Switch → single‐shot TimeTrigger
+  [-EventLogTrigger]                          # Switch → subscribe to event log
+  [-EventLogTriggerOverrides <string[]>]      # e.g. @("Application,1000,MyApp")
+```
+
+### Update-CronTask
+
+Appends new triggers and/or replaces the action script of an existing task without removing existing triggers.
+
+```powershell
+Update-CronTask
+  -Name                     <string>
+  [-ScriptBlock             <ScriptBlock>]
+  [-CronExpression          <string>]
+  [-RelativeTargets         <string[]>]
+  [-BaseDate                <DateTime>]
+  [-RunOnce]
+  [-EventLogTrigger]
+  [-EventLogTriggerOverrides <string[]>]
+```
+
+### Get-CronTask
+
+Lists all tasks under `\cron` (or filters by name).
+
+```powershell
+# All cron tasks
+Get-CronTask
+
+# By name
+Get-CronTask -Name "MyTask"
+```
+
+### Remove-CronTask
+
+Removes one or more tasks (and their event log sources) by piped input or name.
+
+```powershell
+# By pipeline
+Get-CronTask -Name "MyTask" | Remove-CronTask
+
+# By name
+Remove-CronTask -Name "MyTask"
+```
+
+### Trigger-CronEvent
+
+Manually writes an informational event (`EventId 1006`) to the `win-cron` log to kick off any event‑triggered tasks.
+
+```powershell
+Trigger-CronEvent -Name "MyTask"
+```
+
+## Examples
+
+1. **Daily at noon**  
    ```powershell
-   Import-Module -Path "C:\Path\To\YourModule.psm1"
+   New-CronTask -Name "DailyNoon" `
+     -ScriptBlock { Write-Output "Hello at noon" } `
+     -CronExpression "0 12 * * *"
    ```
 
-## Usage
+2. **Last Wednesday at 18:00 + 2h offset**  
+   ```powershell
+   New-CronTask -Name "PayrollReminder" `
+     -ScriptBlock { Send-MailMessage ... } `
+     -CronExpression "0 0 * * *" `
+     -RelativeTargets @("Last,Wednesday,02:00:00")
+   ```
 
-### Creating a Time-Based Task
+3. **One-shot run next matching**  
+   ```powershell
+   New-CronTask -Name "OneTimeReport" `
+     -ScriptBlock { Export-Csv ... } `
+     -CronExpression "30 9 * * 1" `
+     -RunOnce
+   ```
 
-Create a scheduled task that runs at a specific time using a cron expression:
+4. **Trigger on event log entry**  
+   ```powershell
+   New-CronTask -Name "DiskFailWatcher" `
+     -ScriptBlock { Restart-Service -Name 'Spooler' } `
+     -EventLogTrigger `
+     -EventLogTriggerOverrides @("System,51,disk")
+   ```
 
-```powershell
-New-CronTask -Name "DailyTask" -ScriptBlock { Write-Output "Task executed" } -CronExpression "0 12 * * *"
-```
+5. **Update an existing task**  
+   ```powershell
+   Update-CronTask -Name "DailyNoon" `
+     -ScriptBlock { Write-Output "Updated script!" } `
+     -CronExpression "0 15 * * *"  # also append 3:15 PM trigger
+   ```
 
-This command creates a task named "DailyTask" that runs every day at 12:00 PM.
+6. **List & remove**  
+   ```powershell
+   Get-CronTask | Format-Table TaskName,TaskPath
+   Get-CronTask -Name "DailyNoon" | Remove-CronTask
+   ```
 
-### Creating a Task with a Relative Target Date
-
-Create a task that runs relative to a target date (e.g. the last Wednesday of the month):
-
-```powershell
-New-CronTask -Name "RelativeTask" -ScriptBlock { Write-Output "Relative schedule executed" } `
-    -CronExpression "0 12 * * *" -RelativeTarget -Occurrence Last -DayOfWeek Wednesday -BaseDate (Get-Date)
-```
-
-### Creating an Event Log Trigger Task
-
-Create a task that triggers when a specific event is logged:
-
-```powershell
-New-CronTask -Name "EventTask" -ScriptBlock { Write-Output "Event triggered task executed" } `
-    -EventLogTrigger -EventLogName "System" -EventId 105 -ProviderName "Microsoft-Windows-Kernel-Power"
-```
-
-This creates a task named "EventTask" that triggers when an event with ID 105 is recorded in the System log from the provider "Microsoft-Windows-Kernel-Power".
-
-### Managing Tasks
-- **List Tasks:**
-
-  ```powershell
-  Get-CronTask
-  ```
-
-- **Remove a Task:**
-
-  ```powershell
-  Get-CronTask -Name "DailyTask" | Remove-CronTask
-  ```
-
-## Customization
-- **Scheduling Options:**
-  Adjust default parameter values and add further validations as needed.
+7. **Manual event kick**  
+   ```powershell
+   Trigger-CronEvent -Name "DiskFailWatcher"
+   ```
 
 ## Troubleshooting
-- **Administrative Rights:**
-  Ensure you run PowerShell with the necessary privileges when creating or modifying scheduled tasks.
-- **Cron Expression Validation:**
-  Validate your cron expressions if tasks do not fire as expected.
-- **Verbose Logging:**
-  Use the -Verbose switch with functions to see detailed output for troubleshooting.
+
+- **Insufficient privileges** – run PowerShell as administrator.  
+- **Cron syntax errors** – ensure a valid five‑field expression.  
+- **Task never runs** – use `-Verbose` on `New-CronTask` / `Update-CronTask` to see XML generation and registration logs.  
 
 ## Contributing
 
-Contributions are welcome! Please fork the repository, create your changes, and submit a pull request. Issues and feature requests can be submitted via the repository's issue tracker.
+Feel free to fork, improve the module, and submit pull requests. Please write unit tests for new features and update this README accordingly.
 
 ## License
 
-This project is licensed under the MIT License.
-
+MIT License — see [LICENSE](LICENSE) for details.
