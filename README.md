@@ -34,7 +34,7 @@ Import-Module win-cron
 1. Clone or download the repository (or just the `.psm1` file) to your machine:
     
     ```none
-    git clone https://github.com/your‑org/win‑cron.git C:\Modules\win-cron
+    git clone https://github.com/BlueConfetti/win‑cron.git C:\Modules\win-cron
     ```
     
 2. From an elevated PowerShell prompt:
@@ -195,4 +195,4 @@ Feel free to fork, improve the module, and submit pull requests. Please write un
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE.md) for details.
